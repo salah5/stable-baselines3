@@ -4,11 +4,13 @@ from typing import Dict, List, Tuple, Type, Union
 import gym
 import torch as th
 from torch import nn
+import sys
 
 from stable_baselines3.common.preprocessing import get_flattened_obs_dim, is_image_space
 from stable_baselines3.common.type_aliases import TensorDict
 from stable_baselines3.common.utils import get_device
 
+import torch.nn.functional as F
 
 class BaseFeaturesExtractor(nn.Module):
     """
@@ -47,6 +49,66 @@ class FlattenExtractor(BaseFeaturesExtractor):
     def forward(self, observations: th.Tensor) -> th.Tensor:
         return self.flatten(observations)
 
+class DistanceExtractor(BaseFeaturesExtractor):
+    """
+    Feature extract that flatten the input.
+    Used as a placeholder when feature extraction is not needed.
+
+    :param observation_space:
+    """
+
+    def __init__(self, observation_space: gym.Space, features_dim: int = 64):
+        super().__init__(observation_space, features_dim)
+
+        flattened_shape = observation_space.shape[-1] * observation_space.shape[-2]
+
+        # sys.exit()
+
+        self.flatten = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(flattened_shape, 512),
+            nn.ReLU(),
+            nn.Linear(512, features_dim),
+            nn.ReLU()
+            )
+
+    def forward(self, observations: th.Tensor) -> th.Tensor:
+
+        obs1 = observations[:,0].reshape([-1, 1, 97, 97])
+        obs2 = observations[:,1].reshape([-1, 1, 97, 97])
+
+        x1 = self.flatten(obs1)
+        x2 = self.flatten(obs2)
+
+        # print(x2)
+
+        dist = th.abs(x1-x2)
+
+        # print(dist)
+
+        out = th.sigmoid(dist)
+
+        # print(out)
+
+
+        # print(f'{dist.shape=}, {out.shape=}')
+
+        # sys.exit()
+
+        # euclidean_distance = F.pairwise_distance(x1, x2, keepdim = True)
+        # euclidean_distance = euclidean_distance.repeat(1, self._features_dim)
+
+
+        # print(obs1.shape)
+        # print(obs2.shape)
+        # print(obs1)
+        # print()
+        # print(obs2)
+        # print()
+        # print(euclidean_distance)
+        # sys.exit()
+        return out
+
 
 class NatureCNN(BaseFeaturesExtractor):
     """
@@ -64,14 +126,14 @@ class NatureCNN(BaseFeaturesExtractor):
         super().__init__(observation_space, features_dim)
         # We assume CxHxW images (channels first)
         # Re-ordering will be done by pre-preprocessing or wrapper
-        assert is_image_space(observation_space, check_channels=False), (
-            "You should use NatureCNN "
-            f"only with images not with {observation_space}\n"
-            "(you are probably using `CnnPolicy` instead of `MlpPolicy` or `MultiInputPolicy`)\n"
-            "If you are using a custom environment,\n"
-            "please check it using our env checker:\n"
-            "https://stable-baselines3.readthedocs.io/en/master/common/env_checker.html"
-        )
+        # assert is_image_space(observation_space, check_channels=False), (
+        #     "You should use NatureCNN "
+        #     f"only with images not with {observation_space}\n"
+        #     "(you are probably using `CnnPolicy` instead of `MlpPolicy` or `MultiInputPolicy`)\n"
+        #     "If you are using a custom environment,\n"
+        #     "please check it using our env checker:\n"
+        #     "https://stable-baselines3.readthedocs.io/en/master/common/env_checker.html"
+        # )
         n_input_channels = observation_space.shape[0]
         self.cnn = nn.Sequential(
             nn.Conv2d(n_input_channels, 32, kernel_size=8, stride=4, padding=0),
@@ -91,6 +153,84 @@ class NatureCNN(BaseFeaturesExtractor):
 
     def forward(self, observations: th.Tensor) -> th.Tensor:
         return self.linear(self.cnn(observations))
+
+class SiaCNN(BaseFeaturesExtractor):
+    """
+    CNN from DQN nature paper:
+        Mnih, Volodymyr, et al.
+        "Human-level control through deep reinforcement learning."
+        Nature 518.7540 (2015): 529-533.
+
+    :param observation_space:
+    :param features_dim: Number of features extracted.
+        This corresponds to the number of unit for the last layer.
+    """
+
+    def __init__(self, observation_space: gym.spaces.Box, features_dim: int = 512):
+        super().__init__(observation_space, features_dim)
+        # We assume CxHxW images (channels first)
+        # Re-ordering will be done by pre-preprocessing or wrapper
+        # assert is_image_space(observation_space, check_channels=False), (
+        #     "You should use NatureCNN "
+        #     f"only with images not with {observation_space}\n"
+        #     "(you are probably using `CnnPolicy` instead of `MlpPolicy` or `MultiInputPolicy`)\n"
+        #     "If you are using a custom environment,\n"
+        #     "please check it using our env checker:\n"
+        #     "https://stable-baselines3.readthedocs.io/en/master/common/env_checker.html"
+        # )
+        n_input_channels = observation_space.shape[0] - 1
+        print(f'{n_input_channels=}')
+        self.cnn = nn.Sequential(
+            nn.Conv2d(n_input_channels, 32, kernel_size=8, stride=4, padding=0),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0),
+            nn.ReLU(),
+            nn.Flatten(),
+        )
+
+                # Compute shape by doing one forward pass
+        with th.no_grad():
+            n_flatten = self.cnn(th.as_tensor(observation_space.sample()[None])[0][0].unsqueeze(0).unsqueeze(0).float()).shape[1]
+        
+        n_flatten = 4096
+
+        self.linear = nn.Sequential(
+            nn.Linear(n_flatten, features_dim),
+
+        )
+        # self.linear = nn.Sequential(nn.Linear(n_flatten, features_dim), nn.ReLU())
+
+    def forward(self, observations: th.Tensor) -> th.Tensor:
+
+        # print(f'{observations.shape=}')
+        # print(f'{observations[:,0].shape=}')
+        # print(f'{observations[:,1].shape=}')
+
+        obs1 = observations[:,0].reshape([-1, 1, 97, 97])
+        obs2 = observations[:,1].reshape([-1, 1, 97, 97])
+
+        # print(f'{obs1.shape=}')
+        # print(f'{obs2.shape=}')
+
+        output1 = self.cnn(obs1)
+        output2 = self.cnn(obs2)
+
+        # print(f'{output1.shape=}')
+        # print(f'{output2.shape=}')
+
+        output1 = self.linear(output1)
+        output2 = self.linear(output2)
+
+        # print(f'{output1.shape=}')
+        # print(f'{output2.shape=}')
+
+        euclidean_distance = F.pairwise_distance(output1, output2, keepdim = True)
+        euclidean_distance =  euclidean_distance.repeat(1, self._features_dim)
+
+
+        return euclidean_distance
 
 
 def create_mlp(
@@ -130,6 +270,7 @@ def create_mlp(
         modules.append(nn.Linear(last_layer_dim, output_dim))
     if squash_output:
         modules.append(nn.Tanh())
+
     return modules
 
 
@@ -177,6 +318,8 @@ class MlpExtractor(nn.Module):
         last_layer_dim_shared = feature_dim
 
         # Iterate through the shared layers and build the shared parts of the network
+        # print(f'{net_arch=}')
+        # sys.exit()
         for layer in net_arch:
             if isinstance(layer, int):  # Check that this is a shared layer
                 # TODO: give layer a meaningful name

@@ -2,13 +2,13 @@
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, Union
-
+import sys
 import gym
 import torch as th
 from gym import spaces
 from torch import nn
 from torch.distributions import Bernoulli, Categorical, Normal
-
+import torch
 from stable_baselines3.common.preprocessing import get_action_dim
 
 
@@ -270,8 +270,30 @@ class CategoricalDistribution(Distribution):
         action_logits = nn.Linear(latent_dim, self.action_dim)
         return action_logits
 
-    def proba_distribution(self, action_logits: th.Tensor) -> "CategoricalDistribution":
+    def proba_distribution(self, action_logits: th.Tensor, causal: list = None) -> "CategoricalDistribution":
+        odds = torch.exp(action_logits)
+        probs = odds / (1 + odds)
+
+        # print(f'{probs=}')
+
+        # print(f'{action_logits=}, {probs=}')
+        # print(f'{causal=}')
+
+        # if causal:
+        #     # print(f'{probs=}')
+        #     # print(f'{probs[0]=}, {causal[0][0]=}')
+        #     # print(probs[0] < causal[0][0])
+        #     if probs[0][0] < causal[0][0]:
+        #         probs[0][0] = causal[0][0]
+        #     if probs[0][0] > causal[0][1]:
+        #         probs[0][0] = causal[0][1]
+        #     if probs[0][1] < causal[1][0]:
+        #         probs[0][1] = causal[1][0]
+        #     if probs[0][1] > causal[1][1]:
+        #         probs[0][1] = causal[1][1]
+
         self.distribution = Categorical(logits=action_logits)
+        # self.distribution = Categorical(probs=probs)
         return self
 
     def log_prob(self, actions: th.Tensor) -> th.Tensor:

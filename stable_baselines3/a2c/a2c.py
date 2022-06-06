@@ -5,7 +5,7 @@ from gym import spaces
 from torch.nn import functional as F
 
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
-from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy
+from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticSiaMlpPolicy,ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import explained_variance
 
@@ -55,6 +55,7 @@ class A2C(OnPolicyAlgorithm):
         "MlpPolicy": ActorCriticPolicy,
         "CnnPolicy": ActorCriticCnnPolicy,
         "MultiInputPolicy": MultiInputActorCriticPolicy,
+        "SiaMlpPolicy" : ActorCriticSiaMlpPolicy
     }
 
     def __init__(
@@ -64,6 +65,7 @@ class A2C(OnPolicyAlgorithm):
         learning_rate: Union[float, Schedule] = 7e-4,
         n_steps: int = 5,
         gamma: float = 0.99,
+        causal: bool = False,
         gae_lambda: float = 1.0,
         ent_coef: float = 0.0,
         vf_coef: float = 0.5,
@@ -88,6 +90,7 @@ class A2C(OnPolicyAlgorithm):
             learning_rate=learning_rate,
             n_steps=n_steps,
             gamma=gamma,
+            causal=causal,
             gae_lambda=gae_lambda,
             ent_coef=ent_coef,
             vf_coef=vf_coef,

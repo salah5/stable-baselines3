@@ -185,11 +185,6 @@ class BaseAlgorithm(ABC):
             if self.use_sde and not isinstance(self.action_space, gym.spaces.Box):
                 raise ValueError("generalized State-Dependent Exploration (gSDE) can only be used with continuous actions.")
 
-            if isinstance(self.action_space, gym.spaces.Box):
-                assert np.all(
-                    np.isfinite(np.array([self.action_space.low, self.action_space.high]))
-                ), "Continuous action space must have a finite lower and upper bound"
-
     @staticmethod
     def _wrap_env(env: GymEnv, verbose: int = 0, monitor_wrapper: bool = True) -> VecEnv:
         """ "
@@ -213,6 +208,11 @@ class BaseAlgorithm(ABC):
 
         # Make sure that dict-spaces are not nested (not supported)
         check_for_nested_spaces(env.observation_space)
+
+        if isinstance(env.observation_space, gym.spaces.Dict):
+            for space in env.observation_space.spaces.values():
+                if isinstance(space, gym.spaces.Dict):
+                    raise ValueError("Nested observation spaces are not supported (Dict spaces inside Dict space).")
 
         if not is_vecenv_wrapped(env, VecTransposeImage):
             wrap_with_vectranspose = False

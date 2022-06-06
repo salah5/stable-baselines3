@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union
 import gym
 import numpy as np
 import torch as th
-
+import sys
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.buffers import DictRolloutBuffer, RolloutBuffer
 from stable_baselines3.common.callbacks import BaseCallback
@@ -61,6 +61,7 @@ class OnPolicyAlgorithm(BaseAlgorithm):
         max_grad_norm: float,
         use_sde: bool,
         sde_sample_freq: int,
+        causal: bool = False,
         tensorboard_log: Optional[str] = None,
         create_eval_env: bool = False,
         monitor_wrapper: bool = True,
@@ -95,6 +96,8 @@ class OnPolicyAlgorithm(BaseAlgorithm):
         self.vf_coef = vf_coef
         self.max_grad_norm = max_grad_norm
         self.rollout_buffer = None
+        self.bounds = None
+        self.causal = causal
 
         if _init_setup_model:
             self._setup_model()
@@ -147,6 +150,7 @@ class OnPolicyAlgorithm(BaseAlgorithm):
         # Switch to eval mode (this affects batch norm / dropout)
         self.policy.set_training_mode(False)
 
+
         n_steps = 0
         rollout_buffer.reset()
         # Sample new weights for the state dependent exploration
@@ -156,6 +160,7 @@ class OnPolicyAlgorithm(BaseAlgorithm):
         callback.on_rollout_start()
 
         while n_steps < n_rollout_steps:
+        # while not self.rollout_buffer.full:
             if self.use_sde and self.sde_sample_freq > 0 and n_steps % self.sde_sample_freq == 0:
                 # Sample a new noise matrix
                 self.policy.reset_noise(env.num_envs)
@@ -164,6 +169,18 @@ class OnPolicyAlgorithm(BaseAlgorithm):
                 # Convert to pytorch tensor or to TensorDict
                 obs_tensor = obs_as_tensor(self._last_obs, self.device)
                 actions, values, log_probs = self.policy(obs_tensor)
+
+            # print(f'{obs_tensor=}, {actions=}')
+
+            probs = th.exp(log_probs).item()
+            action = actions.item()
+
+            # print(f'{self.bounds=}, {action=}, {log_probs=}, {probs=}')
+            n_steps += 1
+
+
+
+
             actions = actions.cpu().numpy()
 
             # Rescale and perform action
@@ -174,6 +191,10 @@ class OnPolicyAlgorithm(BaseAlgorithm):
 
             new_obs, rewards, dones, infos = env.step(clipped_actions)
 
+
+            # print(f'{obs_tensor=}, {clipped_actions=}, {rewards=}, {infos=}')
+            # sys.exit()
+
             self.num_timesteps += env.num_envs
 
             # Give access to local variables
@@ -182,7 +203,6 @@ class OnPolicyAlgorithm(BaseAlgorithm):
                 return False
 
             self._update_info_buffer(infos)
-            n_steps += 1
 
             if isinstance(self.action_space, gym.spaces.Discrete):
                 # Reshape in case of discrete action
@@ -201,9 +221,31 @@ class OnPolicyAlgorithm(BaseAlgorithm):
                         terminal_value = self.policy.predict_values(terminal_obs)[0]
                     rewards[idx] += self.gamma * terminal_value
 
+            
+
+            if self.bounds and (probs < self.bounds[action][0] or probs > self.bounds[action][1]):
+                # print(f'{self.rollout_buffer.full}, {self.bounds[action][0]=}, {self.bounds[action][1]=}')
+                continue
+
+            # print(self._last_obs.shape)
+            # print(self._last_obs[0][0])
+            # print()
+            # print(self._last_obs[0][1])
+
+            # print(f'{actions=}, {rewards=}')
+            # print(actions)
+            # print(rewards)
+            # sys.exit()
+
+            # print(f'{self._last_obs=}, {actions=}, {rewards=}')
+
             rollout_buffer.add(self._last_obs, actions, rewards, self._last_episode_starts, values, log_probs)
+
             self._last_obs = new_obs
             self._last_episode_starts = dones
+            
+        if self.causal:
+            self.bounds = self.rollout_buffer.get_bounds()
 
         with th.no_grad():
             # Compute value for the last timestep
@@ -260,6 +302,10 @@ class OnPolicyAlgorithm(BaseAlgorithm):
                     self.logger.record("rollout/ep_rew_mean", safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer]))
                     self.logger.record("rollout/ep_len_mean", safe_mean([ep_info["l"] for ep_info in self.ep_info_buffer]))
                 self.logger.record("time/fps", fps)
+                # print(f'{self.bounds=}, bounds_diff0 {(self.bounds[0][1] - self.bounds[0][0])}, bounds_diff1 {(self.bounds[1][1] - self.bounds[1][0])}')
+                if self.bounds:
+                    self.logger.record("rollout/bounds_diff_0", (self.bounds[0][1] - self.bounds[0][0]))
+                    self.logger.record("rollout/bounds_diff_1", (self.bounds[1][1] - self.bounds[1][0]))
                 self.logger.record("time/time_elapsed", int(time.time() - self.start_time), exclude="tensorboard")
                 self.logger.record("time/total_timesteps", self.num_timesteps, exclude="tensorboard")
                 self.logger.dump(step=self.num_timesteps)

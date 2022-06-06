@@ -5,6 +5,7 @@ from typing import Any, Dict, Generator, List, Optional, Union
 import numpy as np
 import torch as th
 from gym import spaces
+import pandas as pd
 
 from stable_baselines3.common.preprocessing import get_action_dim, get_obs_shape
 from stable_baselines3.common.type_aliases import (
@@ -345,6 +346,8 @@ class RolloutBuffer(BaseBuffer):
         self.observations, self.actions, self.rewards, self.advantages = None, None, None, None
         self.returns, self.episode_starts, self.values, self.log_probs = None, None, None, None
         self.generator_ready = False
+        self.buffer_df = None
+        self.p00, self.p01, self.p10, self.p11 = 0, 0, 0, 0
         self.reset()
 
     def reset(self) -> None:
@@ -359,6 +362,32 @@ class RolloutBuffer(BaseBuffer):
         self.advantages = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.generator_ready = False
         super().reset()
+
+    def get_bounds(self):
+
+        ps = self.joint_probs(self.actions.squeeze(), self.rewards.squeeze())
+
+        l_0 = ps[1]
+        l_1 = ps[3]
+
+        h_0 = l_0 + ps[2] + ps[3]
+        h_1 = l_1 + ps[0] + ps[1]
+        
+        return (l_0, h_0), (l_1, h_1)
+
+    def joint_probs(self, x, y):
+
+        self.buffer_df = pd.DataFrame({'X':x, 'Y':y})
+
+        self.p00 += len(self.buffer_df[(self.buffer_df.X == 0) & (self.buffer_df.Y == 0)])
+        self.p01 += len(self.buffer_df[(self.buffer_df.X == 0) & (self.buffer_df.Y == 1)])
+        self.p10 += len(self.buffer_df[(self.buffer_df.X == 1) & (self.buffer_df.Y == 0)])
+        self.p11 += len(self.buffer_df[(self.buffer_df.X == 1) & (self.buffer_df.Y == 1)])
+
+        ps = [self.p00, self.p01, self.p10, self.p11]
+        ps = [x/sum(ps) for x in ps]
+        
+        return ps
 
     def compute_returns_and_advantage(self, last_values: th.Tensor, dones: np.ndarray) -> None:
         """
@@ -436,7 +465,7 @@ class RolloutBuffer(BaseBuffer):
             self.full = True
 
     def get(self, batch_size: Optional[int] = None) -> Generator[RolloutBufferSamples, None, None]:
-        assert self.full, ""
+        # assert self.full, ""
         indices = np.random.permutation(self.buffer_size * self.n_envs)
         # Prepare the data
         if not self.generator_ready:

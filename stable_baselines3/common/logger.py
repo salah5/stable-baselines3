@@ -17,7 +17,6 @@ try:
 except ImportError:
     SummaryWriter = None
 
-
 DEBUG = 10
 INFO = 20
 WARN = 30
@@ -247,13 +246,12 @@ def filter_excluded_keys(
 
 
 class JSONOutputFormat(KVWriter):
-    """
-    Log to a file, in the JSON format
-
-    :param filename: the file to write the log to
-    """
-
     def __init__(self, filename: str):
+        """
+        log to a file, in the JSON format
+
+        :param filename: the file to write the log to
+        """
         self.file = open(filename, "wt")
 
     def write(self, key_values: Dict[str, Any], key_excluded: Dict[str, Union[str, Tuple[str, ...]]], step: int = 0) -> None:
@@ -289,13 +287,13 @@ class JSONOutputFormat(KVWriter):
 
 
 class CSVOutputFormat(KVWriter):
-    """
-    Log to a file, in a CSV format
-
-    :param filename: the file to write the log to
-    """
-
     def __init__(self, filename: str):
+        """
+        log to a file, in a CSV format
+
+        :param filename: the file to write the log to
+        """
+
         self.file = open(filename, "w+t")
         self.keys = []
         self.separator = ","
@@ -353,13 +351,12 @@ class CSVOutputFormat(KVWriter):
 
 
 class TensorBoardOutputFormat(KVWriter):
-    """
-    Dumps key/value pairs into TensorBoard's numeric format.
-
-    :param folder: the folder to write the log to
-    """
-
     def __init__(self, folder: str):
+        """
+        Dumps key/value pairs into TensorBoard's numeric format.
+
+        :param folder: the folder to write the log to
+        """
         assert SummaryWriter is not None, "tensorboard is not installed, you can use " "pip install tensorboard to do so"
         self.writer = SummaryWriter(log_dir=folder)
 
