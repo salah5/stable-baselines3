@@ -199,6 +199,9 @@ class PPO(OnPolicyAlgorithm):
         # train for n_epochs epochs
         for epoch in range(self.n_epochs):
             approx_kl_divs = []
+
+            if self.causal:
+                self.bounds = self.rollout_buffer.get_bounds()
             # Do a complete pass on the rollout buffer
             for rollout_data in self.rollout_buffer.get(self.batch_size):
                 actions = rollout_data.actions
@@ -225,6 +228,26 @@ class PPO(OnPolicyAlgorithm):
                 policy_loss_2 = advantages * th.clamp(ratio, 1 - clip_range, 1 + clip_range)
                 policy_loss = -th.min(policy_loss_1, policy_loss_2).mean()
 
+
+                if self.causal:
+
+                    self.bounds = th.Tensor(self.bounds)
+                    # ratio between old and new policy, should be one at the first iteration
+                    for i in range(len(log_prob)):
+                        action = actions[i]
+                        log_prob[i] = th.clamp(log_prob[i], th.log(self.bounds[action][0]), th.log(self.bounds[action][1]))
+
+                        # print(f'{log_prob[i]=}, {th.log(self.bounds[action][0])=}, {th.log(self.bounds[action][1])=}, ')
+
+                    # print("NEW:")
+                    # print(f'{actions=}, {log_prob=}, {self.bounds}')
+                    # ratio = th.exp(log_prob - rollout_data.old_log_prob)
+
+                    # clipped surrogate loss
+                    policy_loss_1 = advantages * ratio
+                    policy_loss = -policy_loss_1.mean()
+
+
                 # Logging
                 pg_losses.append(policy_loss.item())
                 clip_fraction = th.mean((th.abs(ratio - 1) > clip_range).float()).item()
@@ -239,6 +262,7 @@ class PPO(OnPolicyAlgorithm):
                     values_pred = rollout_data.old_values + th.clamp(
                         values - rollout_data.old_values, -clip_range_vf, clip_range_vf
                     )
+                    
                 # Value loss using the TD(gae_lambda) target
                 value_loss = F.mse_loss(rollout_data.returns, values_pred)
                 value_losses.append(value_loss.item())
@@ -322,3 +346,4 @@ class PPO(OnPolicyAlgorithm):
             eval_log_path=eval_log_path,
             reset_num_timesteps=reset_num_timesteps,
         )
+

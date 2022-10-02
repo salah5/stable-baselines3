@@ -159,6 +159,8 @@ class OnPolicyAlgorithm(BaseAlgorithm):
 
         callback.on_rollout_start()
 
+        remaining = [72, 72]
+
         while n_steps < n_rollout_steps:
         # while not self.rollout_buffer.full:
             if self.use_sde and self.sde_sample_freq > 0 and n_steps % self.sde_sample_freq == 0:
@@ -191,9 +193,10 @@ class OnPolicyAlgorithm(BaseAlgorithm):
 
             new_obs, rewards, dones, infos = env.step(clipped_actions)
 
-
             # print(f'{obs_tensor=}, {clipped_actions=}, {rewards=}, {infos=}')
             # sys.exit()
+
+            # print(f'{remaining=}')
 
             self.num_timesteps += env.num_envs
 
@@ -222,10 +225,10 @@ class OnPolicyAlgorithm(BaseAlgorithm):
                     rewards[idx] += self.gamma * terminal_value
 
             
-
-            if self.bounds and (probs < self.bounds[action][0] or probs > self.bounds[action][1]):
-                # print(f'{self.rollout_buffer.full}, {self.bounds[action][0]=}, {self.bounds[action][1]=}')
-                continue
+            ## Commented out for testing
+            # if self.bounds and (probs < self.bounds[action][0] or probs > self.bounds[action][1]):
+            #     # print(f'{self.rollout_buffer.full}, {self.bounds[action][0]=}, {self.bounds[action][1]=}')
+            #     continue
 
             # print(self._last_obs.shape)
             # print(self._last_obs[0][0])
@@ -245,7 +248,7 @@ class OnPolicyAlgorithm(BaseAlgorithm):
             self._last_episode_starts = dones
             
         if self.causal:
-            self.bounds = self.rollout_buffer.get_bounds()
+            self.bounds = self.rollout_buffer.get_bounds(remaining)
 
         with th.no_grad():
             # Compute value for the last timestep
@@ -299,6 +302,8 @@ class OnPolicyAlgorithm(BaseAlgorithm):
                 fps = int((self.num_timesteps - self._num_timesteps_at_start) / (time.time() - self.start_time))
                 self.logger.record("time/iterations", iteration, exclude="tensorboard")
                 if len(self.ep_info_buffer) > 0 and len(self.ep_info_buffer[0]) > 0:
+                    eplen_mean = safe_mean([ep_info["l"] for ep_info in self.ep_info_buffer])
+                    # self.logger.record("rollout/ep_rew_mean", safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer])/eplen_mean)
                     self.logger.record("rollout/ep_rew_mean", safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer]))
                     self.logger.record("rollout/ep_len_mean", safe_mean([ep_info["l"] for ep_info in self.ep_info_buffer]))
                 self.logger.record("time/fps", fps)

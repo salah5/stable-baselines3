@@ -62,8 +62,6 @@ class DistanceExtractor(BaseFeaturesExtractor):
 
         flattened_shape = observation_space.shape[-1] * observation_space.shape[-2]
 
-        # sys.exit()
-
         self.flatten = nn.Sequential(
             nn.Flatten(),
             nn.Linear(flattened_shape, 512),
@@ -71,6 +69,55 @@ class DistanceExtractor(BaseFeaturesExtractor):
             nn.Linear(512, features_dim),
             nn.ReLU()
             )
+
+    def forward(self, observations: th.Tensor, single_feature=False) -> th.Tensor:
+
+        obs1 = observations[:,0].reshape([-1, 1, 97, 97])
+        obs2 = observations[:,1].reshape([-1, 1, 97, 97])
+
+        x1 = self.flatten(obs1)
+        x2 = self.flatten(obs2)
+
+        out = th.abs(x1-x2)
+
+        # out = th.sigmoid(dist)
+
+        if True:
+            return out, (x1, x2)
+
+        return out
+
+class DiffExtractor(BaseFeaturesExtractor):
+    """
+    Feature extract that flatten the input.
+    Used as a placeholder when feature extraction is not needed.
+
+    :param observation_space:
+    """
+
+    # def __init__(self, observation_space: gym.Space, features_dim: int = 64):
+    def __init__(self, observation_space: gym.Space, features_dim: int = 4096):
+        super().__init__(observation_space, features_dim)
+
+        flattened_shape = observation_space.shape[-1] * observation_space.shape[-2]
+
+        # self.flatten = nn.Sequential(
+        #     nn.Flatten(),
+        #     nn.Linear(flattened_shape, 512),
+        #     nn.ReLU(),
+        #     nn.Linear(512, features_dim),
+        #     )
+
+        self.flatten = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=8, stride=4, padding=0),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0),
+            # nn.ReLU(),
+            nn.Flatten(),
+        )
+
 
     def forward(self, observations: th.Tensor) -> th.Tensor:
 
@@ -80,34 +127,15 @@ class DistanceExtractor(BaseFeaturesExtractor):
         x1 = self.flatten(obs1)
         x2 = self.flatten(obs2)
 
-        # print(x2)
+        # print(x1.shape)
 
         dist = th.abs(x1-x2)
 
-        # print(dist)
-
-        out = th.sigmoid(dist)
-
-        # print(out)
-
-
-        # print(f'{dist.shape=}, {out.shape=}')
+        # print(dist.shape)
 
         # sys.exit()
 
-        # euclidean_distance = F.pairwise_distance(x1, x2, keepdim = True)
-        # euclidean_distance = euclidean_distance.repeat(1, self._features_dim)
-
-
-        # print(obs1.shape)
-        # print(obs2.shape)
-        # print(obs1)
-        # print()
-        # print(obs2)
-        # print()
-        # print(euclidean_distance)
-        # sys.exit()
-        return out
+        return dist
 
 
 class NatureCNN(BaseFeaturesExtractor):

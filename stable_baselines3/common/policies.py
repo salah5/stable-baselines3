@@ -338,7 +338,7 @@ class BasePolicy(BaseModel):
         observation, vectorized_env = self.obs_to_tensor(observation)
 
         with th.no_grad():
-            actions = self._predict(observation, deterministic=deterministic)
+            actions, features = self._predict(observation, deterministic=deterministic)
         # Convert to numpy
         actions = actions.cpu().numpy()
 
@@ -355,7 +355,7 @@ class BasePolicy(BaseModel):
         if not vectorized_env:
             actions = actions[0]
 
-        return actions, state
+        return actions, state, features
 
     def scale_action(self, action: np.ndarray) -> np.ndarray:
         """
@@ -643,7 +643,11 @@ class ActorCriticPolicy(BasePolicy):
         :param deterministic: Whether to use stochastic or deterministic actions
         :return: Taken action according to the policy
         """
-        return self.get_distribution(observation).get_actions(deterministic=deterministic)
+
+        distribution, features = self.get_distribution(observation)
+
+
+        return distribution.get_actions(deterministic=deterministic), features
 
     def evaluate_actions(self, obs: th.Tensor, actions: th.Tensor) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """
@@ -670,9 +674,10 @@ class ActorCriticPolicy(BasePolicy):
         :param obs:
         :return: the action distribution.
         """
-        features = self.extract_features(obs)
+        features, single_feature = self.extract_features(obs, single_feature=True)
         latent_pi = self.mlp_extractor.forward_actor(features)
-        return self._get_action_dist_from_latent(latent_pi)
+
+        return self._get_action_dist_from_latent(latent_pi), (features, single_feature)
 
     def predict_values(self, obs: th.Tensor) -> th.Tensor:
         """
@@ -835,7 +840,7 @@ class ActorCriticSiaMlpPolicy(ActorCriticPolicy):
             optimizer_kwargs,
         )
 
-    def extract_features(self, obs: th.Tensor) -> th.Tensor:
+    def extract_features(self, obs: th.Tensor, single_feature=False) -> th.Tensor:
         """
         Preprocess the observation if needed and extract features.
 
@@ -850,7 +855,7 @@ class ActorCriticSiaMlpPolicy(ActorCriticPolicy):
         # print(preprocessed_obs.shape)
         # sys.exit()
 
-        return self.features_extractor(preprocessed_obs)
+        return self.features_extractor(preprocessed_obs, single_feature)
 
 
 class ActorCriticSiaCnnPolicy(ActorCriticPolicy):

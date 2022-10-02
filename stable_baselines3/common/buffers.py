@@ -363,7 +363,22 @@ class RolloutBuffer(BaseBuffer):
         self.generator_ready = False
         super().reset()
 
-    def get_bounds(self):
+    def get_bounds(self, remaining=None):
+
+        # print(f'{self.actions=}, {self.rewards=}, {self.episode_starts=}')
+
+        # ps = self.joint_probs(self.actions.squeeze(), self.rewards.squeeze())
+
+        # p0 = remaining[0]/sum(remaining)
+        # p1 = remaining[1]/sum(remaining)
+
+
+        # l_0 = np.mean([ps[1], p0])
+        # l_1 = np.mean([ps[3], p1])
+
+        # h_0 = np.mean([l_0 + ps[2] + ps[3], p0])
+        # h_1 = np.mean([l_1 + ps[0] + ps[1], p1])
+
 
         ps = self.joint_probs(self.actions.squeeze(), self.rewards.squeeze())
 
@@ -375,6 +390,14 @@ class RolloutBuffer(BaseBuffer):
         
         return (l_0, h_0), (l_1, h_1)
 
+        # l_0 = np.mean([ps[1], p0])
+        # l_1 = np.mean([ps[3], p1])
+
+        # h_0 = np.mean([l_0 + ps[2] + ps[3], p0])
+        # h_1 = np.mean([l_1 + ps[0] + ps[1], p1])
+
+        # print(f'{ps[1]=}, {p0=}, {ps[3]=}, {p1=}, {l_0=}, {l_1=}')
+        
     def joint_probs(self, x, y):
 
         self.buffer_df = pd.DataFrame({'X':x, 'Y':y})
