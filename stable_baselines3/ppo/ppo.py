@@ -241,7 +241,7 @@ class PPO(OnPolicyAlgorithm):
 
                     # print("NEW:")
                     # print(f'{actions=}, {log_prob=}, {self.bounds}')
-                    # ratio = th.exp(log_prob - rollout_data.old_log_prob)
+                    ratio = th.exp(log_prob - rollout_data.old_log_prob)
 
                     # clipped surrogate loss
                     policy_loss_1 = advantages * ratio

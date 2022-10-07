@@ -33,7 +33,6 @@ class BaseFeaturesExtractor(nn.Module):
     def forward(self, observations: th.Tensor) -> th.Tensor:
         raise NotImplementedError()
 
-
 class FlattenExtractor(BaseFeaturesExtractor):
     """
     Feature extract that flatten the input.
@@ -82,7 +81,7 @@ class DistanceExtractor(BaseFeaturesExtractor):
 
         # out = th.sigmoid(dist)
 
-        if True:
+        if single_feature:
             return out, (x1, x2)
 
         return out
